@@ -116,7 +116,7 @@ CONTEXT:
 QUESTION: {query}
 
 INSTRUCTIONS:
-1. Provide a precise, accurate answer based ONLY on the provided context
+1. Provide a precise, accurate answer based ONLY on the provided context, in Brazilian Portuguese.
 2. Include specific citations with page numbers
 3. If the answer cannot be fully determined from the context, state this clearly
 4. Maintain legal terminology accuracy

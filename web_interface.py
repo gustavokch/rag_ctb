@@ -4,31 +4,8 @@ import time
 import streamlit as st
 from system_setup import setup_legislation_rag_system # Assuming system_setup.py is in the same directory
 
-def create_web_interface(rag_system):
-    st.title("📚 Legislation Study Assistant")
-    
-    # Question input
-    question = st.text_input("Ask a question about the legislation:")
-    
-    if question and st.button("Search"):
-        with st.spinner("Searching and generating answer..."):
-            result = rag_system.ask_question(question)
-            
-            # Display answer
-            st.subheader("Answer")
-            st.write(result['answer'])
-            
-            # Display confidence
-            confidence = result['confidence_score']
-            st.metric("Confidence Score", f"{confidence:.2%}")
-            
-            # Display citations
-            st.subheader("Citations")
-            for cite in result['citations']:
-                st.write(f"📄 Page {cite['page']} (confidence: {cite['confidence']:.2%})")
-
 def deploy_streamlit_with_cloudflared(script_path: str, port: int = 35333):
-    """Deploys the Streamlit app via a temporary Cloudflare tunnel on the specified port."""
+    """Implanta o aplicativo Streamlit através de um túnel temporário do Cloudflare na porta especificada."""
     # Ensure cloudflared is installed
     try:
         import cloudflared
@@ -37,7 +14,7 @@ def deploy_streamlit_with_cloudflared(script_path: str, port: int = 35333):
 
     # Start Streamlit app
     streamlit_proc = subprocess.Popen([
-        sys.executable, "-m", "streamlit", "run", script_path, "--server.port", str(port)
+        "/home/ubuntu/Git/rag_ctb/.venv/bin/streamlit", "run", script_path, "--server.port", str(port)
     ])
     time.sleep(5)  # Wait for Streamlit to start
     # Start Cloudflare tunnel
@@ -48,18 +25,19 @@ def deploy_streamlit_with_cloudflared(script_path: str, port: int = 35333):
         text=True
     )
 
-    print(f"🌐 Streamlit running on port {port}. Spinning up Cloudflare tunnel...")
+    print(f"🌐 Streamlit rodando na porta {port}. Iniciando túnel Cloudflare...")
     public_url = None
     # Parse tunnel output for the public URL
     if tunnel_proc.stdout is not None:
         for line in iter(tunnel_proc.stdout.readline, ""):
             if not "Requesting" in line and "trycloudflare.com" in line:
-                public_url = line.strip().split()
-                print(f"🔗 Public URL: {public_url}")
+                public_url = line.strip().split("https://")[1]
+                public_url.split("|")[-1]  # This line is not a string to be translated, it's code.
+                print(f"🔗 URL Pública: https://{public_url}")
                 break
     if not public_url:
-        print("❌ Could not retrieve Cloudflare tunnel URL.")
-    print("Press Ctrl+C to stop the server and tunnel.")
+        print("❌ Não foi possível obter a URL do túnel Cloudflare.")
+    print("Pressione Ctrl+C para parar o servidor e o túnel.")
     try:
         streamlit_proc.wait()
     except KeyboardInterrupt:
@@ -72,11 +50,10 @@ if __name__ == "__main__":
     # if you're only testing the Streamlit interface's rendering.
     try:
         rag_system = setup_legislation_rag_system("ctb.pdf")
-        create_web_interface(rag_system)
         time.sleep(5)  # Allow time for the interface to load
-        deploy_streamlit_with_cloudflared("web_interface.py", port=35333)
+        deploy_streamlit_with_cloudflared("streamlit_app.py", port=35333)
     except FileNotFoundError:
-        st.error("Please ensure 'ctb.pdf' exists in the same directory.")
+        st.error("Por favor, certifique-se de que 'ctb.pdf' exista no mesmo diretório.")
     except Exception as e:
-        st.error(f"An error occurred during system setup or execution: {e}")
+        st.error(f"Ocorreu um erro durante a configuração ou execução do sistema: {e}")
         
