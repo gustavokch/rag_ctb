@@ -6,7 +6,7 @@ def create_web_interface(rag_system):
     st.title("📚 Assistente de Estudo de Legislação")
     
     # Question input
-    question = st.text_input("Faça uma pergunta sobre a legislação:")
+    question = st.text_area("Faça uma pergunta sobre a legislação:")
     
     if question and st.button("Pesquisar"):
         with st.spinner("Pesquisando e gerando resposta..."):
