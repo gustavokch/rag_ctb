@@ -49,7 +49,12 @@ if __name__ == "__main__":
     # For testing purposes, you might want to create a dummy PDF or skip this part
     # if you're only testing the Streamlit interface's rendering.
     try:
-        rag_system = setup_legislation_rag_system("ctb.pdf")
+        pdf_path = st.text_input("Por favor, insira o caminho para o arquivo PDF da legislação:", "ctb.pdf")
+        if pdf_path:
+            rag_system = setup_legislation_rag_system(pdf_path)
+        else:
+            st.warning("Por favor, insira um caminho de arquivo PDF válido.")
+            st.stop()
         time.sleep(5)  # Allow time for the interface to load
         deploy_streamlit_with_cloudflared("streamlit_app.py", port=35333)
     except FileNotFoundError:

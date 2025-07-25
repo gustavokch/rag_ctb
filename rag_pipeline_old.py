@@ -158,45 +158,8 @@ ANSWER:
         # - Consistency across multiple sources
         
         return float(min(float(source_confidence), 1.0)) # Explicitly cast source_confidence to float
-
-    def expand_query(self, original_query: str) -> List[str]:
-        """Generate related queries for better retrieval"""
-        expansion_prompt = f"""
-        Generate 3 alternative phrasings of this legal query that might help find relevant information:
-        Original: {original_query}
-        
-        Alternatives:
-        """
-        
-        model = genai_models.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content(expansion_prompt)
-        
-        # Parse alternatives and combine results
-        return [original_query] + response.text.strip().split('\n')
-
-    def verify_citations(self, answer: str, sources: List[SearchResult]) -> dict:
-        """Verify that citations in answer match sources"""
-        verification_prompt = f"""
-        Verify that the following answer is supported by the provided sources.
-        Rate support level from 0-1.
-        
-        Answer: {answer}
-        
-        Sources: {[s.content[:200] + "..." for s in sources]}
-        
-        Verification score (0-1):
-        """
-        
-        model = genai_models.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content(verification_prompt)
-        
-        try:
-            score = float(response.text.strip())
-            return {'verification_score': min(max(score, 0), 1)}
-        except:
-            return {'verification_score': 0.5}
-
-    def ask_question(self, question: str, expand_query_flag: bool = False, verify_citations_flag: bool = False) -> dict:
+    
+    def ask_question(self, question: str) -> dict:
         """Main interface for asking questions"""
         # Retrieve relevant chunks
         relevant_chunks = self.retrieve_relevant_chunks(question, top_k=5)

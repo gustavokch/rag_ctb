@@ -26,21 +26,15 @@ def create_web_interface(rag_system):
                 st.write(f"📄 Página {cite['page']} (confiança: {cite['confidence']:.2%})")
 
 if __name__ == "__main__":
-    st.title("Configuração do Sistema RAG de Legislação")
-    pdf_path = st.text_input("Por favor, insira o caminho do arquivo PDF da legislação (ex: ctb.pdf):", "ctb.pdf")
-
-    if st.button("Carregar Legislação"):
-        if pdf_path:
-            with st.spinner(f"Carregando legislação de '{pdf_path}'..."):
-                try:
-                    rag_system = setup_legislation_rag_system(pdf_path)
-                    st.success("Legislação carregada com sucesso!")
-                    time.sleep(1) # Small delay for message to be seen
-                    create_web_interface(rag_system)
-                except FileNotFoundError:
-                    st.error(f"Erro: O arquivo '{pdf_path}' não foi encontrado. Por favor, verifique o caminho.")
-                except Exception as e:
-                    st.error(f"Ocorreu um erro durante a configuração ou execução do sistema: {e}")
-        else:
-            st.warning("Por favor, insira um caminho de arquivo PDF.")
+    # Placeholder for a PDF file. In a real scenario, you'd have a PDF here.
+    # For testing purposes, you might want to create a dummy PDF or skip this part
+    # if you're only testing the Streamlit interface's rendering.
+    try:
+        rag_system = setup_legislation_rag_system("ctb.pdf")
+        time.sleep(5)  # Allow time for the interface to load
+        create_web_interface(rag_system)
+    except FileNotFoundError:
+        st.error("Por favor, certifique-se de que 'ctb.pdf' exista no mesmo diretório.")
+    except Exception as e:
+        st.error(f"Ocorreu um erro durante a configuração ou execução do sistema: {e}")
         
