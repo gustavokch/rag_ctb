@@ -100,6 +100,7 @@ pyxnat==1.6.3
 PyYAML==6.0.2
 rdflib==7.1.4
 referencing==0.36.2
+PySocks==1.7.1
 requests==2.32.4
 requests-oauthlib==2.0.0
 rich==14.1.0

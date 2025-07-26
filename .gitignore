@@ -211,3 +211,5 @@ __marimo__/
 .streamlit/secrets.toml
 install_rooflow_conport.sh
 generate_mcp_yaml.py
+rag_pipeline.py.old
+.first_run
