@@ -411,13 +411,16 @@ ANSWER:
             grounded_answer_text, citation_dicts = self.add_citations(response=grounded_response_obj) # Changed to citation_dicts
             # self.logger.info(f"ask_question: Citation links from add_citations: {citation_dicts}, Type: {type(citation_dicts)}") # Changed to citation_dicts
             
-            disclaimer = "**Resposta não encontrada no documento, busca no Google foi utilizada!**\n"
+            disclaimer = "*Resposta não encontrada no documento, busca no Google foi utilizada!*\n"
             
             # Combine the ungrounded answer with the grounded answer and disclaimer
-            final_answer = f"{final_answer}\n\n---\n\n## {disclaimer}\n---\n\n### Resposta (com busca na web): \n{grounded_answer_text}"
+            final_answer = f"\n\n---\n# {disclaimer}\n---\n### Resposta (com busca na web): \n{grounded_answer_text}"
             final_citations.extend(citation_dicts) # Extend with dictionaries
             # self.logger.info(f"ask_question: Final final_citations after extension: {final_citations}, Type: {type(final_citations)}")
-
+        else:
+            self.logger.info("Initial answer is conclusive, using RAG result.")
+            final_answer = rag_result['answer']
+            final_citations = rag_result['sources']
         # 3. Calculate confidence for RAG answer
         rag_confidence = self.calculate_confidence_score(
             question,
