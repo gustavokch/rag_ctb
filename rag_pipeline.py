@@ -7,6 +7,7 @@ import google.genai as genai
 from google.genai import types
 import google.genai.client as genai_client
 import google.genai.models as genai_models
+import re
 
 from vector_database import LegislationVectorDB
 
@@ -22,6 +23,13 @@ class SearchResult:
     page: int
     confidence: float
     metadata: Dict[str, Any] # Changed to Dict[str, Any]
+
+@dataclass
+class ParsedQuestion:
+    number: int
+    text: str
+    options: Dict[str, str]
+    full_question_text: str
 
 class LegislationRAG:
     def __init__(self, vector_db: LegislationVectorDB):
@@ -143,7 +151,7 @@ ANSWER:
                 'status': 'error'
             }
     
-    def generate_grounded_answer(self, model: str, query: str, context_chunks: Optional[List[SearchResult]], max_tokens: Optional[int]) -> types.GenerateContentResponse:
+    def generate_grounded_answer(self, model: str, query: str, context_chunks: Optional[List[SearchResult]], max_tokens: Optional[int]) -> dict:
         """Generate a grounded answer using Google Search as a tool."""
         
         # Prepare context
@@ -168,9 +176,8 @@ ANSWER:
         1. Provide a precise, accurate answer based on the web search, in Brazilian Portuguese.
         2. If the question includes multiple choice options, select the most appropriate one based on the context and ALWAYS start your response with "A resposta correta é:"
         3. Include specific citations
-        4. If the answer cannot be fully determined from the context, state this clearly
-        5. Maintain legal terminology accuracy
-        6. Structure your response clearly
+        4. Maintain legal terminology accuracy
+        5. Structure your response clearly
 
         ANSWER:
         """
@@ -193,17 +200,21 @@ ANSWER:
                 contents=prompt,
                 config=config,
             )
-            return response
+            
+            # Return a dictionary with the same structure as generate_answer()
+            return {
+                'answer': response.text if response.text else "",
+                'sources': [{'page': chunk.page, 'confidence': chunk.confidence}
+                           for chunk in context_chunks] if context_chunks else [],
+                'status': 'success'
+            }
         except Exception as e:
             self.logger.error(f"Error generating grounded response: {e}")
-            # Return a mock object that mimics the expected structure for error cases
-            class MockGenerateContentResponse:
-                def __init__(self, text_content: str):
-                    self.text = text_content
-                    self.candidates = []
-                    self.grounding_metadata = None # Add grounding_metadata attribute to prevent AttributeError
-
-            return cast(types.GenerateContentResponse, MockGenerateContentResponse(f"Error generating grounded response: {str(e)}"))
+            return {
+                'answer': f"Error generating grounded response: {str(e)}",
+                'sources': [],
+                'status': 'error'
+            }
 
     def calculate_confidence_score(self, query: str, answer: str, sources: List[dict]) -> float:
         """Calculate overall confidence score"""
@@ -388,7 +399,9 @@ ANSWER:
             "não é possível citar", "não é possível referir",
             "não é possível aludir", "não é possível fazer referência",
             "não é possível fazer menção", "não é possível fazer alusão",
-            "não é possível fazer citação"
+            "não é possível fazer citação", "não está disponível no contexto",
+            "não apresenta definições", "não é possível encontrar definições",
+            "não é possível encontrar informações",
         ]
 
         unconclusive_answer = False
@@ -407,16 +420,17 @@ ANSWER:
         
         if unconclusive_answer or web_search == True:
             self.logger.info("Initial answer is inconclusive or web search requested, attempting grounded answer.")
-            grounded_response_obj = self.generate_grounded_answer('gemini-2.5-flash', query=question, context_chunks=None, max_tokens=100 if short_answer else None)
-            grounded_answer_text, citation_dicts = self.add_citations(response=grounded_response_obj) # Changed to citation_dicts
-            # self.logger.info(f"ask_question: Citation links from add_citations: {citation_dicts}, Type: {type(citation_dicts)}") # Changed to citation_dicts
+            grounded_response_dict = self.generate_grounded_answer('gemini-2.5-flash', query=question, context_chunks=None, max_tokens=100 if short_answer else None)
+            
+            # Since generate_grounded_answer now returns a dictionary, we don't need to call add_citations
+            grounded_answer_text = grounded_response_dict['answer']
+            citation_dicts = grounded_response_dict['sources']
             
             disclaimer = "*Resposta não encontrada no documento, busca no Google foi utilizada!*\n"
             
             # Combine the ungrounded answer with the grounded answer and disclaimer
             final_answer = f"\n\n---\n# {disclaimer}\n---\n### Resposta (com busca na web): \n{grounded_answer_text}"
             final_citations.extend(citation_dicts) # Extend with dictionaries
-            # self.logger.info(f"ask_question: Final final_citations after extension: {final_citations}, Type: {type(final_citations)}")
         else:
             self.logger.info("Initial answer is conclusive, using RAG result.")
             final_answer = rag_result['answer']
@@ -447,3 +461,91 @@ ANSWER:
             'retrieved_chunks': len(relevant_chunks),
             'method': 'vector_db'
         }
+
+    def parse_question_bank(self, file_content: str) -> List[ParsedQuestion]:
+        """
+        Parses a string containing a bank of multiple choice questions.
+        Each question is expected in the format:
+
+        ### QUESTÃO [number]
+        [Question text]
+        A) [Option A text]
+        B) [Option B text]
+        C) [Option C text]
+        D) [Option D text]
+
+        ---
+        """
+        questions: List[ParsedQuestion] = []
+        # Regex to capture each question block
+        # It looks for "### QUESTÃO number", then any characters (non-greedy)
+        # until "---" followed by optional whitespace and end of string or another "### QUESTÃO"
+        question_blocks = re.split(r'(?=### QUESTÃO \d+)', file_content)
+        
+        for block in question_blocks:
+            block = block.strip()
+            if not block.startswith("### QUESTÃO"):
+                continue
+
+            try:
+                # Extract question number
+                number_match = re.search(r'### QUESTÃO (\d+)', block)
+                if not number_match:
+                    self.logger.warning(f"Could not find question number in block: {block[:100]}...")
+                    continue
+                question_number = int(number_match.group(1))
+
+                # Split the block into question text and options part
+                # The question text is everything after "### QUESTÃO X" until the first option (e.g., "A)")
+                # The options part is from the first option to the end of the block or "---"
+                
+                # Find the start of the first option
+                first_option_match = re.search(r'\n\s*[A-D]\)', block)
+                if not first_option_match:
+                    self.logger.warning(f"Could not find options in question {question_number}: {block[:100]}...")
+                    continue
+                
+                question_text_end_index = first_option_match.start()
+                question_text = block[len(number_match.group(0)):question_text_end_index].strip()
+
+                options_part = block[question_text_end_index:].strip()
+                # Remove trailing "---" if present
+                if options_part.endswith("---"):
+                    options_part = options_part[:-3].strip()
+
+                # Extract options
+                options = {}
+                option_matches = re.findall(r'([A-D])\)\s*(.*?)(?=\n\s*[A-D]\)|$)', options_part, re.DOTALL)
+                if not option_matches or len(option_matches) < 2: # Expect at least A and B
+                     self.logger.warning(f"Could not parse options correctly for question {question_number}. Found: {option_matches}")
+                     # Fallback: try to split by lines if regex fails for simpler cases
+                     lines = options_part.split('\n')
+                     for line in lines:
+                         line_match = re.match(r'\s*([A-D])\)\s*(.*)', line.strip())
+                         if line_match:
+                             options[line_match.group(1)] = line_match.group(2).strip()
+                     if not options:
+                        continue
+                else:
+                    for opt_letter, opt_text in option_matches:
+                        options[opt_letter] = opt_text.strip()
+                
+                if not options:
+                    self.logger.warning(f"No options found for question {question_number} after parsing.")
+                    continue
+
+                full_question_text = f"### QUESTÃO {question_number}\n{question_text}\n" + \
+                                     "\n".join([f"{key}) {value}" for key, value in options.items()])
+                
+                questions.append(ParsedQuestion(
+                    number=question_number,
+                    text=question_text,
+                    options=options,
+                    full_question_text=full_question_text
+                ))
+
+            except Exception as e:
+                self.logger.error(f"Error parsing question block: {block[:200]}... Error: {e}")
+                continue
+        
+        return questions
